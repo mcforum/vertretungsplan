@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GMB Vertretungs-Alarm</title>
+
+<!-- ===================================================================
+     EINRICHTUNG: Trage hier deine OneSignal-App-ID ein (onesignal.com,
+     kostenlose Web-App anlegen, Site-URL = deine GitHub-Pages-Adresse).
+     Die Datei OneSignalSDKWorker.js muss im selben Ordner liegen!
+     =================================================================== -->
+<script>var ONESIGNAL_APP_ID = 'HIER-DEINE-ONESIGNAL-APP-ID';</script>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --tafel:#234840;        /* Schultafel-Grün */
+    --tafel-tief:#1A362F;
+    --kreide:#F5F3EC;       /* Hintergrund */
+    --papier:#FFFFFF;
+    --gelb:#E5B93C;         /* Kreidegelb = ausgewählt */
+    --tinte:#1E2521;
+    --grau:#6E7A72;
+    --linie:#DCD6C6;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--kreide);
+    color:var(--tinte);
+    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    padding-bottom:110px;
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:0 16px}
+
+  /* ---------- Kopf ---------- */
+  header{
+    background:var(--tafel);
+    background-image:radial-gradient(ellipse at 20% 0%, rgba(255,255,255,.06), transparent 55%);
+    color:#F2EFE4;
+    padding:34px 0 30px;
+    border-bottom:6px solid var(--gelb);
+  }
+  header .wrap{display:flex;flex-direction:column;gap:6px}
+  .schule{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#BFD1C8}
+  h1{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;
+     font-size:clamp(30px,7vw,40px);margin:0;line-height:1.05}
+  header p{margin:6px 0 0;color:#D5DFD8;font-size:15px;max-width:44ch}
+
+  /* ---------- Schritte ---------- */
+  .schritt{margin:26px 0 8px;display:flex;align-items:baseline;gap:10px}
+  .schritt .nr{
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:800;
+    background:var(--tinte);color:var(--kreide);
+    width:26px;height:26px;border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:14px;flex:none;transform:translateY(3px);
+  }
+  .schritt h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:19px;margin:0}
+  .hint{color:var(--grau);font-size:13.5px;margin:2px 0 12px 36px}
+
+  /* ---------- Klassen-Tafel ---------- */
+  .tafel{
+    background:var(--tafel);border-radius:var(--radius);padding:14px 14px 10px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.07), 0 2px 8px rgba(30,37,33,.15);
+  }
+  .stufe{display:flex;align-items:center;gap:8px;padding:5px 0;flex-wrap:wrap}
+  .stufe + .stufe{border-top:1px dashed rgba(255,255,255,.14)}
+  .chip{
+    font:600 15px/1 "Bricolage Grotesque",system-ui,sans-serif;
+    color:#EAF0EA;background:rgba(255,255,255,.08);
+    border:1.5px solid rgba(255,255,255,.28);border-radius:10px;
+    padding:10px 0;min-width:52px;text-align:center;
+    cursor:pointer;user-select:none;
+    transition:transform .08s ease, background .12s ease, color .12s ease;
+  }
+  .chip:active{transform:scale(.95)}
+  .chip[aria-pressed="true"]{
+    background:var(--gelb);border-color:var(--gelb);color:var(--tafel-tief);
+    box-shadow:0 2px 0 rgba(0,0,0,.25);
+  }
+  .chip.stufe-btn{min-width:86px;border-style:dashed;font-weight:700;letter-spacing:.02em}
+  .chip.breit{flex:1;min-width:150px}
+  .chip:focus-visible{outline:3px solid var(--gelb);outline-offset:2px}
+
+  /* ---------- Modus-Karten ---------- */
+  .karten{display:grid;gap:10px}
+  @media(min-width:480px){.karten{grid-template-columns:1fr 1fr}}
+  .karte{
+    background:var(--papier);border:2px solid var(--linie);border-radius:var(--radius);
+    padding:16px;cursor:pointer;user-select:none;
+    display:flex;flex-direction:column;gap:4px;
+    transition:border-color .12s ease, box-shadow .12s ease;
+  }
+  .karte:focus-visible{outline:3px solid var(--tafel);outline-offset:2px}
+  .karte[aria-pressed="true"]{
+    border-color:var(--tafel);
+    box-shadow:0 0 0 2px var(--tafel), 0 3px 10px rgba(35,72,64,.12);
+  }
+  .karte .titel{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:17px;display:flex;align-items:center;gap:8px}
+  .karte .haken{
+    width:20px;height:20px;border-radius:50%;flex:none;
+    border:2px solid var(--linie);display:inline-flex;align-items:center;justify-content:center;
+    font-size:12px;color:transparent;
+  }
+  .karte[aria-pressed="true"] .haken{background:var(--tafel);border-color:var(--tafel);color:var(--gelb)}
+  .karte .desc{color:var(--grau);font-size:13.5px}
+
+  /* ---------- Push-Status ---------- */
+  .pushbox{background:var(--papier);border:2px solid var(--linie);border-radius:var(--radius);padding:16px}
+  .pushbox .status{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+  .punkt{width:12px;height:12px;border-radius:50%;background:var(--linie);flex:none}
+  .punkt.gruen{background:#3E8E5A}
+  .punkt.rot{background:#C4573B}
+  .pushbox .hint2{color:var(--grau);font-size:12.5px;margin:10px 0 0}
+  .ios-tipp{
+    display:none;margin-top:12px;background:var(--kreide);
+    border:1.5px dashed var(--linie);border-radius:10px;
+    padding:10px 12px;font-size:13px;
+  }
+
+  /* ---------- Untere Leiste ---------- */
+  .leiste{
+    position:fixed;left:0;right:0;bottom:0;background:var(--papier);
+    border-top:1px solid var(--linie);box-shadow:0 -4px 16px rgba(30,37,33,.08);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .leiste .wrap{display:flex;gap:12px;align-items:center}
+  #zusammenfassung{flex:1;font-size:13px;color:var(--grau);line-height:1.35}
+  #zusammenfassung b{color:var(--tinte)}
+  #senden{
+    font:700 16px "Bricolage Grotesque",sans-serif;
+    background:var(--tafel);color:var(--gelb);
+    border:none;border-radius:12px;padding:14px 20px;
+    cursor:pointer;white-space:nowrap;
+    transition:opacity .12s ease, transform .08s ease;
+  }
+  #senden:active{transform:scale(.97)}
+  #senden:disabled{opacity:.45;cursor:not-allowed}
+  #senden:focus-visible{outline:3px solid var(--gelb);outline-offset:2px}
+
+  /* ---------- Erfolg / Fehler ---------- */
+  .panel{display:none;background:var(--papier);border:2px solid var(--tafel);border-radius:var(--radius);padding:22px;margin-top:26px}
+  .panel.sichtbar{display:block;animation:auf .25s ease}
+  .panel h2{font-family:"Bricolage Grotesque",sans-serif;margin:0 0 8px;font-size:22px}
+  .panel p{margin:6px 0;font-size:15px}
+  .panel .neu{
+    margin-top:14px;background:none;border:2px solid var(--linie);border-radius:10px;
+    padding:10px 16px;font:600 14px system-ui;cursor:pointer;color:var(--tinte);
+  }
+  #fehler{display:none;background:#FBEFEA;border:2px solid #C4573B;color:#8A3A26;
+    border-radius:10px;padding:12px 14px;margin-top:14px;font-size:14px}
+  @keyframes auf{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  footer{margin:40px 0 20px;color:var(--grau);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="schule">Gymnasium Marktbreit · inoffizielles Schülerprojekt</span>
+    <h1>🔔 Vertretungs&#8209;Alarm</h1>
+    <p>Nie wieder umsonst zur ersten Stunde: Wähle deine Klasse und bekomme Vertretungen direkt als Benachrichtigung auf dein Handy oder deinen Rechner.</p>
+  </div>
+</header>
+
+<main class="wrap" id="formular">
+
+  <!-- SCHRITT 1: Klassen -->
+  <div class="schritt"><span class="nr">1</span><h2>Für welche Klassen?</h2></div>
+  <p class="hint">Tippe deine Klasse an – oder die Jahrgangsstufe links, wenn du alles aus der Stufe sehen willst. Mehrfachauswahl ist okay (z.&nbsp;B. für Geschwister).</p>
+  <div class="tafel" id="tafel" role="group" aria-label="Klassenauswahl"></div>
+
+  <!-- SCHRITT 2: Wann -->
+  <div class="schritt"><span class="nr">2</span><h2>Wann benachrichtigen?</h2></div>
+  <div class="karten" role="radiogroup" aria-label="Benachrichtigungs-Modus">
+    <div class="karte" role="radio" tabindex="0" data-mode="sofort" aria-pressed="false">
+      <span class="titel"><span class="haken">✓</span>⚡ Sofort</span>
+      <span class="desc">Der Plan wird alle 10 Minuten geprüft. Sobald sich für deine Klassen etwas ändert, ploppt die Benachrichtigung auf.</span>
+    </div>
+    <div class="karte" role="radio" tabindex="0" data-mode="zeiten" aria-pressed="false">
+      <span class="titel"><span class="haken">✓</span>🕖 Morgens &amp; abends</span>
+      <span class="desc">Eine Zusammenfassung um 7:00 und 20:00 Uhr – nur wenn es Vertretungen für deine Klassen gibt.</span>
+    </div>
+  </div>
+
+  <!-- SCHRITT 3: Push erlauben -->
+  <div class="schritt"><span class="nr">3</span><h2>Benachrichtigungen erlauben</h2></div>
+  <div class="pushbox">
+    <div class="status"><span class="punkt" id="punkt"></span><span id="statusText">Prüfe, ob dein Browser Benachrichtigungen kann …</span></div>
+    <p class="hint2">Beim Aktivieren fragt dich der Browser einmal um Erlaubnis – tippe auf <b>„Zulassen“</b>. Deine Auswahl wird an diesem Gerät gespeichert; du kannst sie hier jederzeit ändern oder in den Browser-Einstellungen wieder ausschalten.</p>
+    <div class="ios-tipp" id="iosTipp">
+      📱 <b>iPhone/iPad:</b> Benachrichtigungen funktionieren erst, wenn du diese Seite zum Home-Bildschirm hinzufügst:
+      Teilen-Symbol <b>⬆︎</b> → <b>„Zum Home-Bildschirm“</b> → App vom Home-Bildschirm öffnen → dann hier aktivieren.
+    </div>
+  </div>
+
+  <div id="fehler" role="alert"></div>
+</main>
+
+<!-- Erfolgs-Panel -->
+<div class="wrap">
+  <div class="panel" id="erfolg">
+    <h2>Alarm aktiviert ✔</h2>
+    <p id="erfolgText"></p>
+    <p>Dieses Gerät bekommt ab jetzt Benachrichtigungen – die Seite muss dafür nicht geöffnet bleiben.</p>
+    <button class="neu" id="nochmal">Auswahl ändern</button>
+  </div>
+  <footer>Prüft den offiziellen Vertretungsplan der Schule. Kein offizielles Angebot des Gymnasiums Marktbreit.</footer>
+</div>
+
+<!-- Untere Aktionsleiste -->
+<div class="leiste">
+  <div class="wrap">
+    <div id="zusammenfassung">Noch nichts ausgewählt</div>
+    <button id="senden" disabled>Alarm aktivieren</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ================= OneSignal-Grundgerüst ================= */
+  var demoModus = (ONESIGNAL_APP_ID.indexOf('HIER-') === 0);
+  var osBereit = null; // Promise auf die OneSignal-Instanz
+  if (!demoModus) {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    osBereit = new Promise(function (resolve) {
+      OneSignalDeferred.push(async function (OneSignal) {
+        await OneSignal.init({ appId: ONESIGNAL_APP_ID });
+        resolve(OneSignal);
+      });
+    });
+  }
+
+  /* ================= Klassen-Raster =================
+     Stufen 5–11 mit a–d, Stufe 12+13 komplett.
+     Gibt es z.B. eine 7e? Unten einfach 'e' ergänzen. */
+  var BUCHSTABEN = ['a','b','c','d'];
+  var tafel = document.getElementById('tafel');
+  var auswahl = new Set();     // z.B. {"8a","12"} – Zahl allein = ganze Stufe
+  var modus = null;
+
+  for (var stufe = 5; stufe <= 11; stufe++) {
+    var zeile = document.createElement('div');
+    zeile.className = 'stufe';
+    zeile.appendChild(chip('Stufe ' + stufe, String(stufe), 'chip stufe-btn'));
+    BUCHSTABEN.forEach(function(b){ zeile.appendChild(chip(stufe + b, stufe + b, 'chip')); });
+    tafel.appendChild(zeile);
+  }
+  var ober = document.createElement('div');
+  ober.className = 'stufe';
+  ober.appendChild(chip('Jahrgangsstufe 12', '12', 'chip breit'));
+  ober.appendChild(chip('Jahrgangsstufe 13', '13', 'chip breit'));
+  tafel.appendChild(ober);
+
+  function chip(text, wert, cls){
+    var el = document.createElement('button');
+    el.type = 'button'; el.className = cls; el.textContent = text;
+    el.dataset.wert = wert; el.setAttribute('aria-pressed','false');
+    el.addEventListener('click', function(){ toggle(wert); });
+    return el;
+  }
+
+  function toggle(wert){
+    var istStufe = /^\d+$/.test(wert);
+    if (auswahl.has(wert)) auswahl.delete(wert);
+    else {
+      auswahl.add(wert);
+      if (istStufe) {
+        Array.from(auswahl).forEach(function(w){
+          if (w !== wert && w.replace(/[a-e]$/,'') === wert) auswahl.delete(w);
+        });
+      } else auswahl.delete(wert.replace(/[a-e]$/,''));
+    }
+    render();
+  }
+
+  /* ================= Modus-Karten ================= */
+  var karten = document.querySelectorAll('.karte');
+  karten.forEach(function(k){
+    function waehle(){ modus = k.dataset.mode; render(); }
+    k.addEventListener('click', waehle);
+    k.addEventListener('keydown', function(e){
+      if (e.key === ' ' || e.key === 'Enter'){ e.preventDefault(); waehle(); }
+    });
+  });
+
+  /* ================= Push-Status anzeigen ================= */
+  var punkt = document.getElementById('punkt');
+  var statusText = document.getElementById('statusText');
+  var iosIstSafariOhneApp =
+    /iPhone|iPad|iPod/.test(navigator.userAgent) &&
+    !window.matchMedia('(display-mode: standalone)').matches;
+
+  function zeigeStatus(){
+    if (demoModus) {
+      statusText.textContent = 'Demo-Modus – OneSignal-App-ID noch nicht eingetragen.';
+      return;
+    }
+    if (iosIstSafariOhneApp) {
+      punkt.className = 'punkt rot';
+      statusText.textContent = 'Auf dem iPhone: erst zum Home-Bildschirm hinzufügen (siehe unten).';
+      document.getElementById('iosTipp').style.display = 'block';
+      return;
+    }
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      punkt.className = 'punkt rot';
+      statusText.textContent = 'Dieser Browser unterstützt leider keine Benachrichtigungen.';
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      punkt.className = 'punkt gruen';
+      statusText.textContent = 'Benachrichtigungen sind erlaubt – nur noch unten aktivieren.';
+    } else if (Notification.permission === 'denied') {
+      punkt.className = 'punkt rot';
+      statusText.textContent = 'Benachrichtigungen sind blockiert. Bitte in den Browser-Einstellungen für diese Seite wieder erlauben.';
+    } else {
+      punkt.className = 'punkt';
+      statusText.textContent = 'Bereit – beim Aktivieren fragt dich der Browser um Erlaubnis.';
+    }
+  }
+  zeigeStatus();
+
+  /* ================= Zusammenfassung + Button ================= */
+  var senden = document.getElementById('senden');
+  var zsf = document.getElementById('zusammenfassung');
+
+  function render(){
+    document.querySelectorAll('#tafel .chip').forEach(function(c){
+      c.setAttribute('aria-pressed', auswahl.has(c.dataset.wert) ? 'true' : 'false');
+    });
+    karten.forEach(function(k){
+      k.setAttribute('aria-pressed', k.dataset.mode === modus ? 'true' : 'false');
+    });
+    var teile = [];
+    teile.push(auswahl.size ? '<b>' + beschriftung() + '</b>' : 'Klasse wählen');
+    teile.push(modus ? '<b>' + (modus === 'sofort' ? 'Sofort' : '7 &amp; 20 Uhr') + '</b>' : 'Modus wählen');
+    zsf.innerHTML = teile.join(' · ');
+    senden.disabled = !(auswahl.size && modus);
+  }
+
+  function beschriftung(){
+    return Array.from(auswahl).sort().map(function(w){
+      return /^\d+$/.test(w) ? 'Stufe ' + w : w.toUpperCase();
+    }).join(', ');
+  }
+
+  /* ================= Aktivieren ================= */
+  var fehler = document.getElementById('fehler');
+
+  senden.addEventListener('click', async function(){
+    fehler.style.display = 'none';
+    senden.disabled = true;
+    senden.textContent = 'Wird aktiviert …';
+
+    try {
+      if (demoModus) {
+        await new Promise(function(r){ setTimeout(r, 600); });
+        erfolgAnzeigen(true);
+        return;
+      }
+      var OneSignal = await osBereit;
+
+      // 1) Browser-Erlaubnis einholen
+      var erlaubt = OneSignal.Notifications.permission;
+      if (!erlaubt) {
+        await OneSignal.Notifications.requestPermission();
+        erlaubt = OneSignal.Notifications.permission;
+      }
+      if (!erlaubt) throw new Error('Ohne „Zulassen“ können wir dir leider nichts schicken. Du kannst es jederzeit erneut versuchen.');
+
+      // 2) Alte Klassen-Tags dieses Geräts entfernen (Auswahl geändert?)
+      var alte = [];
+      try { alte = JSON.parse(localStorage.getItem('gmbKlassen') || '[]'); } catch(e){}
+      var wegfall = alte.filter(function(k){ return !auswahl.has(k); })
+                        .map(function(k){ return 'k_' + k; });
+      if (wegfall.length) await OneSignal.User.removeTags(wegfall);
+
+      // 3) Neue Tags setzen: k_8a = "sofort" | "zeiten", plus Modus-Tag
+      var tags = { mode: modus };
+      auswahl.forEach(function(k){ tags['k_' + k] = modus; });
+      await OneSignal.User.addTags(tags);
+
+      localStorage.setItem('gmbKlassen', JSON.stringify(Array.from(auswahl)));
+      erfolgAnzeigen(false);
+    } catch (err) {
+      senden.disabled = false;
+      senden.textContent = 'Alarm aktivieren';
+      fehler.textContent = (err && err.message) ? err.message
+        : 'Das hat nicht geklappt – bitte versuch es gleich noch einmal.';
+      fehler.style.display = 'block';
+      zeigeStatus();
+    }
+  });
+
+  function erfolgAnzeigen(istDemo){
+    document.getElementById('formular').style.display = 'none';
+    document.querySelector('.leiste').style.display = 'none';
+    document.getElementById('erfolgText').innerHTML =
+      'Dieses Gerät bekommt Benachrichtigungen für <b>' + beschriftung() + '</b> – ' +
+      (modus === 'sofort' ? 'sofort bei jeder Änderung.' : 'morgens um 7 und abends um 20 Uhr.') +
+      (istDemo ? '<br><i>(Demo-Modus: OneSignal ist noch nicht konfiguriert, es wurde nichts gespeichert.)</i>' : '');
+    document.getElementById('erfolg').classList.add('sichtbar');
+    window.scrollTo({ top: 0 });
+  }
+
+  document.getElementById('nochmal').addEventListener('click', function(){
+    document.getElementById('erfolg').classList.remove('sichtbar');
+    document.getElementById('formular').style.display = '';
+    document.querySelector('.leiste').style.display = '';
+    senden.textContent = 'Alarm aktivieren';
+    render(); zeigeStatus();
+  });
+
+  // Vorherige Auswahl dieses Geräts wieder anzeigen
+  try {
+    JSON.parse(localStorage.getItem('gmbKlassen') || '[]')
+      .forEach(function(k){ auswahl.add(k); });
+  } catch(e){}
+
+  render();
+})();
+</script>
+</body>
+</html>
