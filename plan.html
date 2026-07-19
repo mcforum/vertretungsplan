@@ -1,0 +1,337 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vertretungen · GMB</title>
+
+<!-- =====================================================================
+     Web-App-URL deines Apps-Script-Projekts eintragen (endet auf /exec).
+     Es ist dieselbe URL wie für den Daten-Endpunkt (doGet).
+     ===================================================================== -->
+<script>
+  var PLAN_ENDPOINT = 'HIER-DEINE-APPS-SCRIPT-WEB-APP-URL/exec';
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --tafel:#234840; --tafel-tief:#1A362F; --kreide:#F5F3EC; --papier:#FFFFFF;
+    --gelb:#E5B93C; --tinte:#1E2521; --grau:#6E7A72; --linie:#DCD6C6; --rot:#C4573B;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--kreide);color:var(--tinte);
+    font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:600px;margin:0 auto;padding:0 16px 48px}
+
+  header{background:var(--tafel);
+    background-image:radial-gradient(ellipse at 25% 0%, rgba(255,255,255,.06), transparent 55%);
+    color:#F2EFE4;padding:26px 0 22px;border-bottom:6px solid var(--gelb)}
+  header .wrap{padding-bottom:0;display:flex;flex-direction:column;gap:4px}
+  .schule{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#BFD1C8}
+  h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:28px;margin:0}
+  #stand{color:#CBD8D0;font-size:13px;margin-top:2px}
+
+  #status{margin:26px 0;color:var(--grau);font-size:15px;text-align:center}
+
+  .tag{margin:24px 0 10px}
+  .tag h2{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:19px;margin:0;
+    color:var(--tafel-tief)}
+  .tag .rel{color:var(--gelb);font-weight:700}
+
+  .karte{
+    background:var(--papier);border:2px solid var(--linie);border-radius:14px;
+    padding:14px 16px;margin:10px 0;display:flex;gap:14px;align-items:flex-start
+  }
+  .karte.frei{border-color:var(--gelb);background:#FFFBF0}
+  .std{
+    flex:none;min-width:52px;height:52px;border-radius:12px;
+    background:var(--tafel);color:var(--gelb);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:"Bricolage Grotesque",sans-serif;line-height:1
+  }
+  .std b{font-size:20px}
+  .std span{font-size:10px;letter-spacing:.05em;opacity:.85;margin-top:2px}
+  .karte.frei .std{background:var(--gelb);color:var(--tafel-tief)}
+  .inhalt{flex:1;min-width:0}
+  .inhalt .kopf{font-weight:700;font-size:16px;margin:0 0 2px}
+  .inhalt .detail{color:var(--grau);font-size:14px;word-break:break-word}
+  .badge{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;
+    padding:2px 9px;margin-right:6px;vertical-align:1px}
+  .b-entfall{background:#FBE4DC;color:#8A3A26}
+  .b-verlegt{background:#E4ECFB;color:#274B8A}
+  .b-raum{background:#E7F0E9;color:#245C38}
+
+  .aktion{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap}
+  .aktion a,.aktion button{
+    font:600 14px system-ui;text-decoration:none;cursor:pointer;
+    padding:11px 16px;border-radius:10px;border:2px solid var(--linie);
+    background:var(--papier);color:var(--tinte)
+  }
+  .aktion .haupt{background:var(--tafel);color:var(--gelb);border-color:var(--tafel);
+    font-family:"Bricolage Grotesque",sans-serif;font-weight:700}
+
+  footer{margin:36px 0 0;color:var(--grau);font-size:12px;text-align:center}
+
+  /* ---------- Passwort-Gate (identisch zur Hauptseite) ---------- */
+  body.locked > *:not(#gate){display:none !important}
+  #gate{display:none}
+  body.locked #gate{display:flex}
+  #gate{position:fixed;inset:0;z-index:9999;background:var(--tafel);
+    background-image:radial-gradient(ellipse at 30% 0%, rgba(255,255,255,.07), transparent 60%);
+    flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;text-align:center;color:#F2EFE4}
+  #gate .box{width:100%;max-width:340px}
+  #gate .glocke{font-size:44px}
+  #gate h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:26px;margin:10px 0 4px}
+  #gate p{color:#CBD8D0;font-size:14px;margin:0 0 20px}
+  #gate input{width:100%;font:16px system-ui;padding:14px 16px;text-align:center;
+    border:2px solid rgba(255,255,255,.3);border-radius:12px;background:rgba(255,255,255,.1);color:#fff}
+  #gate input::placeholder{color:#9FB3AA}
+  #gate input:focus{outline:none;border-color:var(--gelb)}
+  #gate button{width:100%;margin-top:12px;font:800 16px "Bricolage Grotesque",sans-serif;
+    background:var(--gelb);color:var(--tafel-tief);border:none;border-radius:12px;padding:14px;cursor:pointer}
+  #gate button:disabled{opacity:.6;cursor:not-allowed}
+  #gateFehler{min-height:20px;margin-top:12px;color:#F3C9BC;font-size:14px;font-weight:600}
+</style>
+</head>
+<body class="locked">
+<script>
+  (function(){
+    try { if (localStorage.getItem('gmb_zugang') === 'ok') document.body.classList.remove('locked'); }
+    catch(e){}
+  })();
+</script>
+
+<!-- Passwort-Gate -->
+<div id="gate">
+  <div class="box">
+    <div class="glocke">🔔</div>
+    <h1>Vertretungs-Alarm</h1>
+    <p>Zugang nur für Schülerinnen und Schüler des Gymnasiums Marktbreit. Bitte das Schul-Passwort eingeben.</p>
+    <input type="password" id="gatePw" autocomplete="off" placeholder="Passwort" aria-label="Passwort">
+    <button id="gateBtn" type="button">Weiter</button>
+    <div id="gateFehler" role="alert"></div>
+  </div>
+</div>
+
+<header><div class="wrap">
+  <span class="schule">Gymnasium Marktbreit</span>
+  <h1 id="titel">Vertretungen</h1>
+  <div id="stand"></div>
+</div></header>
+
+<main class="wrap">
+  <div id="status">Lade Vertretungen …</div>
+  <div id="liste"></div>
+
+  <div class="aktion">
+    <button class="haupt" id="reload" type="button">Aktualisieren</button>
+    <a href="index.html">Benachrichtigungen ändern</a>
+  </div>
+
+  <footer>Angezeigt werden die aktuell im Plan stehenden Einträge. Kein offizielles Angebot der Schule.</footer>
+</main>
+
+<script>
+/* ===================== Passwort-Gate ===================== */
+(function(){
+  'use strict';
+  var SALT_HEX = '6fca33e48fe8407db4bf819f5e2a0092';
+  var ITER     = 150000;
+  var HASH_HEX = '006467b27a042333b2858f2263f3822789a3f1929923197f8e7f76696456e858';
+
+  var pw = document.getElementById('gatePw');
+  var btn = document.getElementById('gateBtn');
+  var fehler = document.getElementById('gateFehler');
+
+  function hexToBytes(hex){var a=new Uint8Array(hex.length/2);for(var i=0;i<a.length;i++)a[i]=parseInt(hex.substr(i*2,2),16);return a;}
+  function bytesToHex(buf){return Array.prototype.map.call(new Uint8Array(buf),function(b){return('0'+b.toString(16)).slice(-2);}).join('');}
+
+  async function pruefe(eingabe){
+    if(!(window.crypto&&crypto.subtle)) return true;
+    var key=await crypto.subtle.importKey('raw',new TextEncoder().encode(eingabe),{name:'PBKDF2'},false,['deriveBits']);
+    var bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:hexToBytes(SALT_HEX),iterations:ITER,hash:'SHA-256'},key,256);
+    return bytesToHex(bits)===HASH_HEX;
+  }
+  async function versuch(){
+    fehler.textContent=''; btn.disabled=true; btn.textContent='Prüfe …';
+    try{
+      if(await pruefe(pw.value)){
+        try{ localStorage.setItem('gmb_zugang','ok'); }catch(e){}
+        document.body.classList.remove('locked');
+        var g=document.getElementById('gate'); if(g) g.remove();
+        if(window.__startPlan) window.__startPlan();
+      } else { fehler.textContent='Falsches Passwort.'; pw.value=''; pw.focus(); }
+    }catch(e){ fehler.textContent='Fehler bei der Prüfung – bitte neu laden.'; }
+    finally{ btn.disabled=false; btn.textContent='Weiter'; }
+  }
+  if(pw){
+    btn.addEventListener('click',versuch);
+    pw.addEventListener('keydown',function(e){ if(e.key==='Enter') versuch(); });
+    if(document.body.classList.contains('locked')) pw.focus();
+  }
+})();
+</script>
+
+<script>
+/* ===================== Detailseite ===================== */
+(function(){
+  'use strict';
+  var WD = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+  var params = new URLSearchParams(location.search);
+  var klasse = (params.get('k') || '').trim().toLowerCase();
+
+  var statusEl = document.getElementById('status');
+  var listeEl  = document.getElementById('liste');
+  var standEl  = document.getElementById('stand');
+  var titelEl  = document.getElementById('titel');
+  if (klasse) titelEl.textContent = 'Vertretungen · ' + (/^\d+$/.test(klasse) ? 'Stufe '+klasse : klasse.toUpperCase());
+
+  document.getElementById('reload').addEventListener('click', function(){ if(!laeuft) laden(); });
+
+  // ---- Datum & Wochentag ----
+  function parseDate(s){
+    var m = /(\d{1,2})\.(\d{1,2})\.(\d{2,4})?/.exec(s || '');
+    if(!m) return null;
+    var d=+m[1], mo=+m[2]-1, y=m[3]?+m[3]:null;
+    var today=new Date(); today.setHours(0,0,0,0);
+    if(y==null){
+      y=today.getFullYear();
+      var probe=new Date(y,mo,d), diff=(probe-today)/86400000;
+      if(diff<-180) y++; else if(diff>180) y--;
+    } else if(y<100){ y+=2000; }
+    var dt=new Date(y,mo,d); dt.setHours(0,0,0,0); return dt;
+  }
+  function dateLabel(s){
+    var dt=parseDate(s);
+    if(!dt) return { text: s||'Ohne Datum', rel:'' };
+    var today=new Date(); today.setHours(0,0,0,0);
+    var diff=Math.round((dt-today)/86400000);
+    var rel = diff===0?'heute':diff===1?'morgen':diff===-1?'gestern':'';
+    return { text: WD[dt.getDay()]+', '+dt.getDate()+'.'+(dt.getMonth()+1)+'.', rel: rel, sort: dt.getTime() };
+  }
+
+  // ---- Eine Zeile lesbar aufbereiten ----
+  function isStunde(c){ return /^\d{1,2}(\s*-\s*\d{1,2})?\.?$/.test(String(c).trim()); }
+  function istKlasse(c){ return /^Q?(1[0-3]|[5-9])[a-e]?(\s*(G[89]|\/\d))?$/i.test(String(c).trim()); }
+
+  function baueKarte(e){
+    var karte=document.createElement('div');
+    karte.className='karte'+(e.typ==='frei'?' frei':'');
+
+    // Frei-Eintrag: Apps Script liefert cells = ["🏖 Unterrichtsfrei","Stunde 1.-11."]
+    if(e.typ==='frei'){
+      karte.innerHTML =
+        '<div class="std">🏖</div>'+
+        '<div class="inhalt"><p class="kopf">Unterrichtsfrei</p>'+
+        '<p class="detail">'+esc((e.cells[1]||'').replace(/^Stunde\s*/,'Stunde '))+'</p></div>';
+      return karte;
+    }
+
+    var cells=e.cells.slice().filter(function(c){return c!=='';});
+    // Stunde herausziehen
+    var stunde='';
+    for(var i=0;i<cells.length;i++){ if(isStunde(cells[i])){ stunde=String(cells[i]).replace(/\.$/,''); cells.splice(i,1); break; } }
+    // Klassen-Zellen entfernen (die Klasse steht schon in der Überschrift)
+    var rest=cells.filter(function(c){ return !istKlasse(c); });
+
+    // "Art" erkennen
+    var art = rest.find(function(c){ return /(entfällt|fällt aus|verlegt|statt|raum|EVA|selbst|aufgabe|frei)/i.test(c); });
+    var badge='', kopf='', detail='';
+    if(art && /entfällt|fällt aus/i.test(art)){ badge='<span class="badge b-entfall">fällt aus</span>'; }
+    else if(art && /verlegt/i.test(art)){ badge='<span class="badge b-verlegt">verlegt</span>'; }
+    else if(art && /raum/i.test(art)){ badge='<span class="badge b-raum">Raumänderung</span>'; }
+
+    if(art){
+      kopf = art;                                         // z.B. "entfällt", "statt 6.St."
+      detail = rest.filter(function(c){ return c!==art; }).join(' · ');
+    } else {
+      kopf = 'Vertretung';                                // kein Schlüsselwort → generisch
+      detail = rest.join(' · ');                          // alle Angaben in die Detailzeile
+    }
+
+    var stdBlock = stunde
+      ? '<div class="std"><b>'+esc(stunde)+'</b><span>STD</span></div>'
+      : '<div class="std"><b>–</b></div>';
+
+    karte.innerHTML =
+      stdBlock +
+      '<div class="inhalt">'+
+        '<p class="kopf">'+badge+esc(kopf)+'</p>'+
+        (detail ? '<p class="detail">'+esc(detail)+'</p>' : '')+
+      '</div>';
+    return karte;
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  // ---- Rendern ----
+  function render(data){
+    listeEl.innerHTML='';
+    if(data.generated){
+      var g=new Date(data.generated);
+      standEl.textContent='Stand: '+g.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' Uhr';
+    }
+    var entries=data.entries||[];
+    if(entries.length===0){
+      statusEl.style.display='block';
+      statusEl.textContent = klasse
+        ? 'Aktuell keine Vertretungen für deine Auswahl. 🎉'
+        : 'Aktuell keine Vertretungen. 🎉';
+      return;
+    }
+    statusEl.style.display='none';
+
+    // Nach Tag gruppieren, Reihenfolge des Plans beibehalten
+    var reihenfolge=[], gruppen={};
+    entries.forEach(function(e){
+      var key=e.date||'';
+      if(!gruppen[key]){ gruppen[key]=[]; reihenfolge.push(key); }
+      gruppen[key].push(e);
+    });
+
+    reihenfolge.forEach(function(key){
+      var lbl=dateLabel(key);
+      var tag=document.createElement('div'); tag.className='tag';
+      tag.innerHTML='<h2>'+esc(lbl.text)+(lbl.rel?' <span class="rel">'+lbl.rel+'</span>':'')+'</h2>';
+      listeEl.appendChild(tag);
+      // Frei-Einträge zuerst
+      gruppen[key].slice().sort(function(a,b){
+        return (a.typ==='frei'?0:1)-(b.typ==='frei'?0:1);
+      }).forEach(function(e){ listeEl.appendChild(baueKarte(e)); });
+    });
+  }
+
+  // ---- Daten holen (JSONP) ----
+  var laeuft=false;
+  function laden(){
+    if(PLAN_ENDPOINT.indexOf('HIER-')===0){ statusEl.textContent='PLAN_ENDPOINT ist noch nicht gesetzt (Zeile 12).'; return; }
+    laeuft=true; statusEl.style.display='block'; statusEl.textContent='Lade Vertretungen …';
+
+    var cb='plan_'+Date.now();
+    var s=document.createElement('script');
+    var timeout=setTimeout(function(){ ende(); statusEl.textContent='Keine Antwort. Web-App-URL und Bereitstellung prüfen.'; }, 15000);
+
+    window[cb]=function(res){
+      clearTimeout(timeout); ende();
+      if(res && res.ok){ render(res); }
+      else { statusEl.textContent='Fehler: '+((res&&res.error)||'unbekannt'); }
+    };
+    function ende(){ laeuft=false; if(s&&s.parentNode) s.parentNode.removeChild(s); try{delete window[cb];}catch(e){window[cb]=undefined;} }
+
+    var url=PLAN_ENDPOINT+'?callback='+cb+(klasse?('&k='+encodeURIComponent(klasse)):'');
+    s.src=url;
+    s.onerror=function(){ clearTimeout(timeout); ende(); statusEl.textContent='Verbindung fehlgeschlagen.'; };
+    document.body.appendChild(s);
+  }
+
+  // Erst nach dem Gate laden (oder sofort, wenn schon frei)
+  window.__startPlan=laden;
+  if(!document.body.classList.contains('locked')) laden();
+})();
+</script>
+</body>
+</html>
