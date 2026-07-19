@@ -159,9 +159,63 @@
   @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
   footer{margin:40px 0 20px;color:var(--grau);font-size:12px;text-align:center}
+
+  /* ---------- Passwort-Gate ---------- */
+  /* Inhalt ist versteckt, solange <body> die Klasse "locked" trägt.
+     Die Klasse wird sofort per Inline-Skript gesetzt (kein Aufblitzen). */
+  body.locked > *:not(#gate){display:none !important}
+  #gate{display:none}
+  body.locked #gate{display:flex}
+  #gate{
+    position:fixed;inset:0;z-index:9999;
+    background:var(--tafel);
+    background-image:radial-gradient(ellipse at 30% 0%, rgba(255,255,255,.07), transparent 60%);
+    flex-direction:column;align-items:center;justify-content:center;
+    padding:24px;text-align:center;color:#F2EFE4;
+  }
+  #gate .box{width:100%;max-width:340px}
+  #gate .glocke{font-size:44px}
+  #gate h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:26px;margin:10px 0 4px}
+  #gate p{color:#CBD8D0;font-size:14px;margin:0 0 20px}
+  #gate input{
+    width:100%;font:16px system-ui;padding:14px 16px;text-align:center;
+    border:2px solid rgba(255,255,255,.3);border-radius:12px;
+    background:rgba(255,255,255,.1);color:#fff;
+  }
+  #gate input::placeholder{color:#9FB3AA}
+  #gate input:focus{outline:none;border-color:var(--gelb)}
+  #gate button{
+    width:100%;margin-top:12px;font:800 16px "Bricolage Grotesque",sans-serif;
+    background:var(--gelb);color:var(--tafel-tief);
+    border:none;border-radius:12px;padding:14px;cursor:pointer;
+  }
+  #gate button:disabled{opacity:.6;cursor:not-allowed}
+  #gateFehler{min-height:20px;margin-top:12px;color:#F3C9BC;font-size:14px;font-weight:600}
 </style>
 </head>
 <body>
+<script>
+  // Sofort sperren, bevor irgendetwas gerendert wird (verhindert Aufblitzen).
+  // Wenn dieses Gerät schon freigeschaltet ist, bleibt es offen.
+  (function(){
+    try {
+      if (localStorage.getItem('gmb_zugang') === 'ok') return;
+    } catch(e){}
+    document.body.className = (document.body.className + ' locked').trim();
+  })();
+</script>
+
+<!-- Passwort-Gate: nur wer das Schul-Passwort kennt, sieht das Formular -->
+<div id="gate">
+  <div class="box">
+    <div class="glocke">🔔</div>
+    <h1>Vertretungs-Alarm</h1>
+    <p>Zugang nur für Schülerinnen und Schüler des Gymnasiums Marktbreit. Bitte das Schul-Passwort eingeben.</p>
+    <input type="password" id="gatePw" inputmode="text" autocomplete="off" placeholder="Passwort" aria-label="Passwort">
+    <button id="gateBtn" type="button">Weiter</button>
+    <div id="gateFehler" role="alert"></div>
+  </div>
+</div>
 
 <header>
   <div class="wrap">
@@ -223,6 +277,85 @@
     <button id="senden" disabled>Alarm aktivieren</button>
   </div>
 </div>
+
+<script>
+/* ===================== Passwort-Gate =====================
+   Das Passwort steht NICHT im Klartext hier. Gespeichert ist nur ein
+   gesalzener PBKDF2-Hash (SHA-256, 150 000 Runden). Die Eingabe wird im
+   Browser gehasht und mit diesem Wert verglichen – der Klartext lässt
+   sich daraus nicht zurückrechnen.
+
+   Passwort ändern? Neue Werte so erzeugen (Node.js):
+     const c=require('crypto'), pw='NEUES-PASSWORT',
+       salt=c.randomBytes(16), it=150000,
+       h=c.pbkdf2Sync(pw,salt,it,32,'sha256');
+     console.log(salt.toString('hex'), it, h.toString('hex'));
+   und unten SALT_HEX / ITER / HASH_HEX ersetzen.
+
+   Hinweis: Eine statische Seite kann ein Gate technisch nie
+   unumgehbar machen. Schützenswerte Inhalte (Plandaten, Schul-Login)
+   liegen daher NICHT auf dieser Seite, sondern nur im Apps Script bzw.
+   in den Push-Nachrichten. */
+(function(){
+  'use strict';
+  var SALT_HEX = '6fca33e48fe8407db4bf819f5e2a0092';
+  var ITER     = 150000;
+  var HASH_HEX = '006467b27a042333b2858f2263f3822789a3f1929923197f8e7f76696456e858';
+
+  var pw = document.getElementById('gatePw');
+  var btn = document.getElementById('gateBtn');
+  var fehler = document.getElementById('gateFehler');
+  if (!pw) return; // Gate nicht vorhanden (schon frei)
+
+  function hexToBytes(hex){
+    var a = new Uint8Array(hex.length/2);
+    for (var i=0;i<a.length;i++) a[i]=parseInt(hex.substr(i*2,2),16);
+    return a;
+  }
+  function bytesToHex(buf){
+    return Array.prototype.map.call(new Uint8Array(buf),function(b){
+      return ('0'+b.toString(16)).slice(-2);
+    }).join('');
+  }
+
+  async function pruefe(eingabe){
+    if (!(window.crypto && crypto.subtle)) {
+      // Sehr alte Browser: kein Web-Crypto. Dann kein Gate erzwingen.
+      return true;
+    }
+    var key = await crypto.subtle.importKey('raw',
+      new TextEncoder().encode(eingabe), {name:'PBKDF2'}, false, ['deriveBits']);
+    var bits = await crypto.subtle.deriveBits({
+      name:'PBKDF2', salt:hexToBytes(SALT_HEX), iterations:ITER, hash:'SHA-256'
+    }, key, 256);
+    return bytesToHex(bits) === HASH_HEX;
+  }
+
+  async function versuch(){
+    fehler.textContent = '';
+    btn.disabled = true; btn.textContent = 'Prüfe …';
+    try {
+      var ok = await pruefe(pw.value);
+      if (ok) {
+        try { localStorage.setItem('gmb_zugang','ok'); } catch(e){}
+        document.body.classList.remove('locked');
+        var g = document.getElementById('gate'); if (g) g.remove();
+      } else {
+        fehler.textContent = 'Falsches Passwort.';
+        pw.value = ''; pw.focus();
+      }
+    } catch(e){
+      fehler.textContent = 'Fehler bei der Prüfung – bitte neu laden.';
+    } finally {
+      btn.disabled = false; btn.textContent = 'Weiter';
+    }
+  }
+
+  btn.addEventListener('click', versuch);
+  pw.addEventListener('keydown', function(e){ if (e.key === 'Enter') versuch(); });
+  pw.focus();
+})();
+</script>
 
 <script>
 (function(){
