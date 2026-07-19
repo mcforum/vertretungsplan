@@ -160,6 +160,23 @@
 
   footer{margin:40px 0 20px;color:var(--grau);font-size:12px;text-align:center}
 
+  /* ---------- Status-Banner (angemeldet) ---------- */
+  .statusBanner{
+    background:#EAF3EC;border:2px solid #3E8E5A;border-radius:14px;
+    padding:14px 16px;margin:22px 0 4px;
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+  }
+  .statusBanner .sb-text{flex:1;min-width:180px;font-size:15px;color:#245C38}
+  .statusBanner .sb-text b{color:#1c4a2c}
+  .sb-modus{color:#3E8E5A;font-weight:600}
+  .statusBanner .sb-btns{display:flex;gap:8px}
+  .statusBanner button{
+    font:600 14px system-ui;padding:9px 14px;border-radius:10px;cursor:pointer;
+    border:2px solid #3E8E5A;background:var(--papier);color:#245C38;
+  }
+  .statusBanner button.abmelden{border-color:var(--linie);color:var(--grau)}
+  .statusBanner button:active{transform:scale(.97)}
+
   /* ---------- Passwort-Gate ---------- */
   /* Inhalt ist versteckt, solange <body> die Klasse "locked" trägt.
      Die Klasse wird sofort per Inline-Skript gesetzt (kein Aufblitzen). */
@@ -226,6 +243,15 @@
 </header>
 
 <main class="wrap" id="formular">
+
+  <!-- Status-Banner: nur sichtbar, wenn dieses Gerät bereits angemeldet ist -->
+  <div id="statusBanner" class="statusBanner" hidden>
+    <div class="sb-text">Du bist angemeldet für <b id="sbKlassen">—</b> <span id="sbModus" class="sb-modus"></span></div>
+    <div class="sb-btns">
+      <button type="button" id="btnAendern">Ändern</button>
+      <button type="button" id="btnAbmelden" class="abmelden">Abmelden</button>
+    </div>
+  </div>
 
   <!-- SCHRITT 1: Klassen -->
   <div class="schritt"><span class="nr">1</span><h2>Für welche Klassen?</h2></div>
@@ -540,6 +566,7 @@
       await OneSignal.User.addTags(tags);
 
       localStorage.setItem('gmbKlassen', JSON.stringify(Array.from(auswahl)));
+      localStorage.setItem('gmbModus', modus);
       erfolgAnzeigen(false);
     } catch (err) {
       senden.disabled = false;
@@ -567,7 +594,7 @@
     document.getElementById('formular').style.display = '';
     document.querySelector('.leiste').style.display = '';
     senden.textContent = 'Alarm aktivieren';
-    render(); zeigeStatus();
+    render(); zeigeStatus(); zeigeBanner();
   });
 
   // Vorherige Auswahl dieses Geräts wieder anzeigen
@@ -576,6 +603,70 @@
       .forEach(function(k){ auswahl.add(k); });
   } catch(e){}
 
+  // ---------- Status-Banner: angemeldet / ändern / abmelden ----------
+  var banner = document.getElementById('statusBanner');
+  var sbKlassen = document.getElementById('sbKlassen');
+  var sbModus = document.getElementById('sbModus');
+
+  function aktuellesAbo(){
+    var arr = [];
+    try { arr = JSON.parse(localStorage.getItem('gmbKlassen') || '[]'); } catch(e){}
+    var m = localStorage.getItem('gmbModus') || '';
+    return { klassen: arr, modus: m };
+  }
+
+  function zeigeBanner(){
+    var abo = aktuellesAbo();
+    if (!abo.klassen.length) { banner.hidden = true; return; }
+    banner.hidden = false;
+    sbKlassen.textContent = abo.klassen.slice().sort().map(function(w){
+      return /^\d+$/.test(w) ? 'Stufe ' + w : w.toUpperCase();
+    }).join(', ');
+    sbModus.textContent = abo.modus === 'zeiten' ? '(morgens & abends)'
+                        : abo.modus === 'sofort' ? '(sofort)' : '';
+  }
+
+  // "Ändern": zum Formular scrollen, aktuelle Auswahl ist schon gesetzt
+  document.getElementById('btnAendern').addEventListener('click', function(){
+    var abo = aktuellesAbo();
+    if (abo.modus === 'sofort' || abo.modus === 'zeiten') modus = abo.modus;
+    render();
+    document.querySelector('.schritt').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // "Abmelden": Tags in OneSignal entfernen, lokal zurücksetzen, neu wählen lassen
+  var btnAbmelden = document.getElementById('btnAbmelden');
+  btnAbmelden.addEventListener('click', async function(){
+    var abo = aktuellesAbo();
+    btnAbmelden.disabled = true;
+    var alt = btnAbmelden.textContent;
+    btnAbmelden.textContent = 'Melde ab …';
+    try {
+      if (!demoModus && abo.klassen.length) {
+        var OneSignal = await osBereit;
+        var weg = abo.klassen.map(function(k){ return 'k_' + k; });
+        weg.push('mode');
+        await OneSignal.User.removeTags(weg);
+        // Push für dieses Gerät abschalten (Opt-out)
+        try { OneSignal.User.PushSubscription.optOut(); } catch(e){}
+      }
+    } catch(e){ /* still zurücksetzen, auch wenn OneSignal hakt */ }
+
+    // Lokal alles zurücksetzen → Nutzer kann frisch neu wählen
+    localStorage.removeItem('gmbKlassen');
+    localStorage.removeItem('gmbModus');
+    auswahl.clear();
+    modus = null;
+    btnAbmelden.disabled = false;
+    btnAbmelden.textContent = alt;
+    banner.hidden = true;
+    render();
+    fehler.textContent = 'Du bist abgemeldet. Du kannst jederzeit oben neu auswählen und dich wieder anmelden.';
+    fehler.style.display = 'block';
+    fehler.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  zeigeBanner();
   render();
 })();
 </script>
