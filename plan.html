@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -11,7 +10,7 @@
      Es ist dieselbe URL wie für den Daten-Endpunkt (doGet).
      ===================================================================== -->
 <script>
-  var PLAN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbza0mzQManmzp02lQFOm9FCzUBVXuQ8Eob9192QXeGY0QElXJZx_PVZqGxMym3XfOGM/exec';
+  var PLAN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyCtM9MF_KctexHf2WVUf4WTYNIwgOB6Qd8v2ZOEYJUxWtaUYhX6qPkH_y7OhlKOFGq/exec';
 </script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -33,6 +32,23 @@
   .schule{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#BFD1C8}
   h1{font-family:"Bricolage Grotesque",sans-serif;font-weight:800;font-size:28px;margin:0}
   #stand{color:#CBD8D0;font-size:13px;margin-top:2px}
+
+  .umschalter{display:inline-flex;margin-top:14px;background:rgba(255,255,255,.12);
+    border-radius:10px;padding:3px;gap:3px}
+  .umschalter button{
+    font:600 14px system-ui;border:none;background:transparent;color:#E8EFEA;
+    padding:8px 18px;border-radius:8px;cursor:pointer;
+  }
+  .umschalter button.aktiv{background:var(--gelb);color:var(--tafel-tief);font-weight:700}
+
+  /* Neu hervorgehoben */
+  .karte.neu{border-color:var(--gelb);box-shadow:0 0 0 2px var(--gelb),0 4px 14px rgba(229,185,60,.3);
+    animation:pop .4s ease}
+  @keyframes pop{0%{transform:scale(.98)}60%{transform:scale(1.015)}100%{transform:scale(1)}}
+  .neu-badge{display:inline-block;font-size:11px;font-weight:800;background:var(--gelb);
+    color:var(--tafel-tief);border-radius:6px;padding:1px 7px;margin-right:6px;vertical-align:1px;
+    text-transform:uppercase;letter-spacing:.04em}
+  @media(prefers-reduced-motion:reduce){.karte.neu{animation:none}}
 
   #status{margin:26px 0;color:var(--grau);font-size:15px;text-align:center}
 
@@ -125,6 +141,10 @@
   <span class="schule">Gymnasium Marktbreit</span>
   <h1 id="titel">Vertretungen</h1>
   <div id="stand"></div>
+  <div id="umschalter" class="umschalter" hidden>
+    <button type="button" data-view="meine" class="aktiv">Meine</button>
+    <button type="button" data-view="alle">Alle</button>
+  </div>
 </div></header>
 
 <main class="wrap">
@@ -186,15 +206,54 @@
   'use strict';
   var WD = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
   var params = new URLSearchParams(location.search);
-  var klasse = (params.get('k') || '').trim().toLowerCase();
+  var pushKlasse = (params.get('k') || '').trim().toLowerCase(); // aus der Benachrichtigung
+
+  // Abo dieses Geräts (aus der Anmeldung): z.B. ["8","11","12","13"]
+  var abo = [];
+  try { abo = JSON.parse(localStorage.getItem('gmbKlassen') || '[]'); } catch(e){}
+  abo = abo.map(function(x){ return String(x).toLowerCase(); });
+
+  // Ansicht: "meine" (nur Abo) oder "alle". Ohne Abo → "alle".
+  var ansicht = abo.length ? 'meine' : 'alle';
 
   var statusEl = document.getElementById('status');
   var listeEl  = document.getElementById('liste');
   var standEl  = document.getElementById('stand');
   var titelEl  = document.getElementById('titel');
-  if (klasse) titelEl.textContent = 'Vertretungen · ' + (/^\d+$/.test(klasse) ? 'Stufe '+klasse : klasse.toUpperCase());
+  var umschalter = document.getElementById('umschalter');
+  var alleEntries = [];
+
+  // Umschalter nur zeigen, wenn es ein Abo gibt (sonst nur "alle" sinnvoll)
+  if (abo.length) {
+    umschalter.hidden = false;
+    umschalter.querySelectorAll('button').forEach(function(b){
+      b.classList.toggle('aktiv', b.dataset.view === ansicht);
+      b.addEventListener('click', function(){
+        ansicht = b.dataset.view;
+        umschalter.querySelectorAll('button').forEach(function(x){
+          x.classList.toggle('aktiv', x.dataset.view === ansicht);
+        });
+        zeigeListe();
+      });
+    });
+  }
 
   document.getElementById('reload').addEventListener('click', function(){ if(!laeuft) laden(); });
+
+  // ---- Passt ein Eintrag zum Abo? ----
+  function klasseMatch(ec, ziel){
+    if (ec === ziel) return true;
+    if (/^\d+$/.test(ziel)) return ec.replace(/[a-e]$/,'') === ziel; // Stufe deckt a–e ab
+    return false;
+  }
+  function gehoertZuAbo(e){
+    if (e.typ === 'info') return true;                 // Infos gelten für alle
+    var istOberstufe = abo.some(function(a){ return a==='11'||a==='12'||a==='13'; });
+    if (istOberstufe && (e.classes||[]).indexOf('kurs') !== -1) return true;
+    return (e.classes||[]).some(function(ec){
+      return abo.some(function(a){ return klasseMatch(ec, a); });
+    });
+  }
 
   // ---- Datum & Wochentag ----
   function parseDate(s){
@@ -223,13 +282,13 @@
     var karte=document.createElement('div');
     var label = (e.klasse||'').trim();  // Rohbezeichnung: "8a", "1Mu1", "13 G9", "8abcNTG"
 
-    // 1) Kein Unterricht (abwesende Klasse) – Bezeichnung ist essenziell
+    // 1) Abwesende Klasse (ganze Klasse weg, z.B. Exkursion)
     if(e.typ==='frei'){
       karte.className='karte frei';
       karte.innerHTML =
-        '<div class="std">🏖</div>'+
+        '<div class="std">🚌</div>'+
         '<div class="inhalt">'+
-          '<p class="kopf">'+(label?'<span class="klasse-chip">'+esc(label)+'</span>':'')+'Kein Unterricht</p>'+
+          '<p class="kopf">'+(label?'<span class="klasse-chip">'+esc(label)+'</span>':'')+'Abwesende Klasse</p>'+
           '<p class="detail">Stunde '+esc(e.std||'')+'</p>'+
         '</div>';
       return karte;
@@ -284,26 +343,37 @@
 
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
-  // ---- Rendern ----
-  function render(data){
+  function entryKey(e){ return (e.date||'')+'|'+e.typ+'|'+(e.cells||[]).join('|'); }
+
+  // Gesehene Einträge (zur Neu-Hervorhebung) – pro Gerät gemerkt
+  function ladeGesehen(){ try { return JSON.parse(localStorage.getItem('gmbGesehen')||'[]'); } catch(e){ return []; } }
+  function speichereGesehen(keys){ try { localStorage.setItem('gmbGesehen', JSON.stringify(keys)); } catch(e){} }
+
+  // ---- Anzeige nach aktuellem Filter/Ansicht aufbauen ----
+  function zeigeListe(){
     listeEl.innerHTML='';
-    if(data.generated){
-      var g=new Date(data.generated);
-      standEl.textContent='Stand: '+g.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' Uhr';
-    }
-    var entries=data.entries||[];
-    if(entries.length===0){
+    titelEl.textContent = (ansicht==='meine') ? 'Mein Vertretungsplan' : 'Ganzer Vertretungsplan';
+
+    var sichtbar = (ansicht==='meine') ? alleEntries.filter(gehoertZuAbo) : alleEntries.slice();
+
+    if(sichtbar.length===0){
       statusEl.style.display='block';
-      statusEl.textContent = klasse
-        ? 'Aktuell keine Vertretungen für deine Auswahl. 🎉'
+      statusEl.textContent = (ansicht==='meine')
+        ? 'Aktuell keine Vertretungen für dein Abo. 🎉  (Oben auf „Alle“ tippen für den ganzen Plan.)'
         : 'Aktuell keine Vertretungen. 🎉';
       return;
     }
     statusEl.style.display='none';
 
-    // Nach Tag gruppieren, Reihenfolge des Plans beibehalten
+    // Was ist neu (seit letztem Besuch)?
+    var gesehen = ladeGesehen();
+    var gesehenSet = {}; gesehen.forEach(function(k){ gesehenSet[k]=1; });
+    var erstbesuch = gesehen.length===0;
+    var ersteNeueKarte = null;
+
+    // Nach Tag gruppieren (Reihenfolge des Plans beibehalten)
     var reihenfolge=[], gruppen={};
-    entries.forEach(function(e){
+    sichtbar.forEach(function(e){
       var key=e.date||'';
       if(!gruppen[key]){ gruppen[key]=[]; reihenfolge.push(key); }
       gruppen[key].push(e);
@@ -314,15 +384,32 @@
       var tag=document.createElement('div'); tag.className='tag';
       tag.innerHTML='<h2>'+esc(lbl.text)+(lbl.rel?' <span class="rel">'+lbl.rel+'</span>':'')+'</h2>';
       listeEl.appendChild(tag);
-      // Reihenfolge je Tag: kein Unterricht → Vertretungen → allgemeine Infos
       var rang={frei:0,vertretung:1,info:2};
-      gruppen[key].slice().sort(function(a,b){
-        return (rang[a.typ]||1)-(rang[b.typ]||1);
-      }).forEach(function(e){ listeEl.appendChild(baueKarte(e)); });
+      gruppen[key].slice().sort(function(a,b){ return (rang[a.typ]||1)-(rang[b.typ]||1); })
+        .forEach(function(e){
+          var karte=baueKarte(e);
+          // Neu, wenn nicht schon gesehen (beim allerersten Besuch nichts markieren)
+          if(!erstbesuch && !gesehenSet[entryKey(e)]){
+            karte.classList.add('neu');
+            var kopf=karte.querySelector('.kopf');
+            if(kopf) kopf.insertAdjacentHTML('afterbegin','<span class="neu-badge">Neu</span>');
+            if(!ersteNeueKarte) ersteNeueKarte=karte;
+          }
+          listeEl.appendChild(karte);
+        });
     });
+
+    // Zur ersten Neuigkeit scrollen (sonst nach oben)
+    if(ersteNeueKarte){
+      setTimeout(function(){ ersteNeueKarte.scrollIntoView({behavior:'smooth',block:'center'}); }, 150);
+    }
+
+    // Aktuellen Stand als "gesehen" merken (alle aktuell sichtbaren + bekannten)
+    var neuGesehen = sichtbar.map(entryKey);
+    speichereGesehen(neuGesehen);
   }
 
-  // ---- Daten holen (JSONP) ----
+  // ---- Daten holen (JSONP) – IMMER alles, Filter passiert lokal ----
   var laeuft=false;
   function laden(){
     if(PLAN_ENDPOINT.indexOf('HIER-')===0){ statusEl.textContent='PLAN_ENDPOINT ist noch nicht gesetzt (Zeile 12).'; return; }
@@ -334,13 +421,19 @@
 
     window[cb]=function(res){
       clearTimeout(timeout); ende();
-      if(res && res.ok){ render(res); }
-      else { statusEl.textContent='Fehler: '+((res&&res.error)||'unbekannt'); }
+      if(res && res.ok){
+        alleEntries = res.entries||[];
+        if(res.generated){
+          var g=new Date(res.generated);
+          standEl.textContent='Stand: '+g.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' Uhr';
+        }
+        zeigeListe();
+      } else { statusEl.textContent='Fehler: '+((res&&res.error)||'unbekannt'); }
     };
     function ende(){ laeuft=false; if(s&&s.parentNode) s.parentNode.removeChild(s); try{delete window[cb];}catch(e){window[cb]=undefined;} }
 
-    var url=PLAN_ENDPOINT+'?callback='+cb+(klasse?('&k='+encodeURIComponent(klasse)):'');
-    s.src=url;
+    // Ohne k → der Endpunkt liefert ALLE Einträge; Filter macht die Seite selbst
+    s.src=PLAN_ENDPOINT+'?callback='+cb;
     s.onerror=function(){ clearTimeout(timeout); ende(); statusEl.textContent='Verbindung fehlgeschlagen.'; };
     document.body.appendChild(s);
   }
