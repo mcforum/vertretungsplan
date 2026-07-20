@@ -553,8 +553,20 @@
       }
       if (!erlaubt) throw new Error('Ohne „Zulassen“ können wir dir leider nichts schicken. Du kannst es jederzeit erneut versuchen.');
 
-      // 1b) Falls das Gerät zuvor abgemeldet (opt-out) war: wieder aktivieren
-      try { OneSignal.User.PushSubscription.optIn(); } catch(e){}
+      // 1b) Push-Abo für dieses Gerät sicher aktivieren (auch nach früherem Abmelden).
+      //     optIn() MUSS abgewartet werden, sonst werden die Tags auf einem
+      //     noch abgemeldeten Abo gesetzt → OneSignal führt das Gerät als "unsubscribed".
+      try { await OneSignal.User.PushSubscription.optIn(); } catch(e){}
+
+      // Auf eine aktive Subscription-ID warten (max. ~6 s), damit das Gerät
+      // im OneSignal-Backend wirklich als abonniert erscheint.
+      var subId = null;
+      for (var v = 0; v < 30; v++) {
+        try { subId = OneSignal.User.PushSubscription.id; } catch(e){}
+        if (subId) break;
+        await new Promise(function(r){ setTimeout(r, 200); });
+      }
+      if (!subId) throw new Error('Push-Anmeldung hat nicht geklappt. Bitte Seite neu laden und erneut versuchen (in Chrome ggf. Benachrichtigungen für die Seite zurücksetzen).');
 
       // 2) Alte Klassen-Tags dieses Geräts entfernen (Auswahl geändert?)
       var alte = [];
@@ -650,8 +662,8 @@
         var weg = abo.klassen.map(function(k){ return 'k_' + k; });
         weg.push('mode');
         await OneSignal.User.removeTags(weg);
-        // Push für dieses Gerät abschalten (Opt-out)
-        try { OneSignal.User.PushSubscription.optOut(); } catch(e){}
+        // Push für dieses Gerät abschalten (Opt-out) – awaiten
+        try { await OneSignal.User.PushSubscription.optOut(); } catch(e){}
       }
     } catch(e){ /* still zurücksetzen, auch wenn OneSignal hakt */ }
 
