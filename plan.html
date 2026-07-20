@@ -11,7 +11,7 @@
      Es ist dieselbe URL wie für den Daten-Endpunkt (doGet).
      ===================================================================== -->
 <script>
-  var PLAN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzcyjLqojAqeho9MtduNW5lfoEQtWvfmakBWFFPsU55h87wGw8qliU8CPdZ-5NVI-E-/exec';
+  var PLAN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbylhzx_KSR403hkwOTzQPzYkExE4wy858oJivM2_TjnEaVOR0VGxSdZUUSg4P3ilftk/exec';
 </script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -61,6 +61,9 @@
   .inhalt .detail{color:var(--grau);font-size:14px;word-break:break-word}
   .badge{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;
     padding:2px 9px;margin-right:6px;vertical-align:1px}
+  .klasse-chip{display:inline-block;font-family:"Bricolage Grotesque",sans-serif;
+    font-weight:700;font-size:13px;background:var(--tafel);color:var(--gelb);
+    border-radius:8px;padding:2px 8px;margin-right:8px;vertical-align:1px}
   .b-entfall{background:#FBE4DC;color:#8A3A26}
   .b-verlegt{background:#E4ECFB;color:#274B8A}
   .b-raum{background:#E7F0E9;color:#245C38}
@@ -218,14 +221,17 @@
   // ---- Eine Zeile lesbar aufbereiten ----
   function baueKarte(e){
     var karte=document.createElement('div');
+    var label = (e.klasse||'').trim();  // Rohbezeichnung: "8a", "1Mu1", "13 G9", "8abcNTG"
 
-    // 1) Kein Unterricht (abwesende Klasse)
+    // 1) Kein Unterricht (abwesende Klasse) – Bezeichnung ist essenziell
     if(e.typ==='frei'){
       karte.className='karte frei';
       karte.innerHTML =
         '<div class="std">🏖</div>'+
-        '<div class="inhalt"><p class="kopf">Kein Unterricht</p>'+
-        '<p class="detail">Stunde '+esc(e.std||'')+'</p></div>';
+        '<div class="inhalt">'+
+          '<p class="kopf">'+(label?'<span class="klasse-chip">'+esc(label)+'</span>':'')+'Kein Unterricht</p>'+
+          '<p class="detail">Stunde '+esc(e.std||'')+'</p>'+
+        '</div>';
       return karte;
     }
 
@@ -238,7 +244,7 @@
       return karte;
     }
 
-    // 3) Vertretung – aus den sauberen Feldern einen Satz bauen
+    // 3) Vertretung – Bezeichnung (Chip) + lesbarer Satz aus den Feldern
     karte.className='karte';
     var badge='', kopf='';
     if(/entf/i.test(e.info)){
@@ -254,12 +260,11 @@
       kopf=bits.join(', ')||'Vertretung';
     }
 
-    // Zusatzinfo (z.B. "statt Mi 6.St.", "zusammen mit 7bc") als Detailzeile
+    // Zusatzinfo (z.B. "statt Mi 6.St.", "zusammen mit 7bc")
     var detail='';
     if(e.info && !/^(entf\S*llt)$/i.test(e.info) && !/^raum\S*nderung$/i.test(e.info)){
       detail=e.info;
     }
-    // Fach-Lehrer-Kürzel (e.lkr) bei Nicht-Entfall zusätzlich zeigen
     if(e.lkr && !/entf/i.test(e.info)){
       detail=(detail?detail+' · ':'')+'urspr. '+e.lkr;
     }
@@ -271,7 +276,7 @@
     karte.innerHTML =
       stdBlock +
       '<div class="inhalt">'+
-        '<p class="kopf">'+badge+esc(kopf)+'</p>'+
+        '<p class="kopf">'+(label?'<span class="klasse-chip">'+esc(label)+'</span>':'')+badge+esc(kopf)+'</p>'+
         (detail ? '<p class="detail">'+esc(detail)+'</p>' : '')+
       '</div>';
     return karte;
