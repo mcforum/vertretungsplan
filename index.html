@@ -553,6 +553,9 @@
       }
       if (!erlaubt) throw new Error('Ohne „Zulassen“ können wir dir leider nichts schicken. Du kannst es jederzeit erneut versuchen.');
 
+      // 1b) Falls das Gerät zuvor abgemeldet (opt-out) war: wieder aktivieren
+      try { OneSignal.User.PushSubscription.optIn(); } catch(e){}
+
       // 2) Alte Klassen-Tags dieses Geräts entfernen (Auswahl geändert?)
       var alte = [];
       try { alte = JSON.parse(localStorage.getItem('gmbKlassen') || '[]'); } catch(e){}
