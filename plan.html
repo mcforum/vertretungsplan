@@ -11,7 +11,7 @@
      Es ist dieselbe URL wie für den Daten-Endpunkt (doGet).
      ===================================================================== -->
 <script>
-  var PLAN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyOiQWRUEALy_toL6Xaq7yE-A5406ht-nGc9K6Wv1RkDNx1w_RpJS8wDaYU55zfTyRd/exec';
+  var PLAN_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzcyjLqojAqeho9MtduNW5lfoEQtWvfmakBWFFPsU55h87wGw8qliU8CPdZ-5NVI-E-/exec';
 </script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -46,6 +46,7 @@
     padding:14px 16px;margin:10px 0;display:flex;gap:14px;align-items:flex-start
   }
   .karte.frei{border-color:var(--gelb);background:#FFFBF0}
+  .karte.info{border-color:#B9C7DE;background:#F4F7FC}
   .std{
     flex:none;min-width:52px;height:52px;border-radius:12px;
     background:var(--tafel);color:var(--gelb);
@@ -210,51 +211,61 @@
     if(!dt) return { text: s||'Ohne Datum', rel:'' };
     var today=new Date(); today.setHours(0,0,0,0);
     var diff=Math.round((dt-today)/86400000);
-    var rel = diff===0?'heute':diff===1?'morgen':diff===-1?'gestern':'';
+    var rel = diff===0?'heute':diff===1?'morgen':diff===2?'übermorgen':diff===-1?'gestern':'';
     return { text: WD[dt.getDay()]+', '+dt.getDate()+'.'+(dt.getMonth()+1)+'.', rel: rel, sort: dt.getTime() };
   }
 
   // ---- Eine Zeile lesbar aufbereiten ----
-  function isStunde(c){ return /^\d{1,2}(\s*-\s*\d{1,2})?\.?$/.test(String(c).trim()); }
-  function istKlasse(c){ return /^Q?(1[0-3]|[5-9])[a-e]?(\s*(G[89]|\/\d))?$/i.test(String(c).trim()); }
-
   function baueKarte(e){
     var karte=document.createElement('div');
-    karte.className='karte'+(e.typ==='frei'?' frei':'');
 
-    // Frei-Eintrag: Apps Script liefert cells = ["🏖 Unterrichtsfrei","Stunde 1.-11."]
+    // 1) Kein Unterricht (abwesende Klasse)
     if(e.typ==='frei'){
+      karte.className='karte frei';
       karte.innerHTML =
         '<div class="std">🏖</div>'+
-        '<div class="inhalt"><p class="kopf">Unterrichtsfrei</p>'+
-        '<p class="detail">'+esc((e.cells[1]||'').replace(/^Stunde\s*/,'Stunde '))+'</p></div>';
+        '<div class="inhalt"><p class="kopf">Kein Unterricht</p>'+
+        '<p class="detail">Stunde '+esc(e.std||'')+'</p></div>';
       return karte;
     }
 
-    var cells=e.cells.slice().filter(function(c){return c!=='';});
-    // Stunde herausziehen
-    var stunde='';
-    for(var i=0;i<cells.length;i++){ if(isStunde(cells[i])){ stunde=String(cells[i]).replace(/\.$/,''); cells.splice(i,1); break; } }
-    // Klassen-Zellen entfernen (die Klasse steht schon in der Überschrift)
-    var rest=cells.filter(function(c){ return !istKlasse(c); });
-
-    // "Art" erkennen
-    var art = rest.find(function(c){ return /(entfällt|fällt aus|verlegt|statt|raum|EVA|selbst|aufgabe|frei)/i.test(c); });
-    var badge='', kopf='', detail='';
-    if(art && /entfällt|fällt aus/i.test(art)){ badge='<span class="badge b-entfall">fällt aus</span>'; }
-    else if(art && /verlegt/i.test(art)){ badge='<span class="badge b-verlegt">verlegt</span>'; }
-    else if(art && /raum/i.test(art)){ badge='<span class="badge b-raum">Raumänderung</span>'; }
-
-    if(art){
-      kopf = art;                                         // z.B. "entfällt", "statt 6.St."
-      detail = rest.filter(function(c){ return c!==art; }).join(' · ');
-    } else {
-      kopf = 'Vertretung';                                // kein Schlüsselwort → generisch
-      detail = rest.join(' · ');                          // alle Angaben in die Detailzeile
+    // 2) Allgemeine Info (Freitext unter der Tabelle)
+    if(e.typ==='info'){
+      karte.className='karte info';
+      karte.innerHTML =
+        '<div class="std">ℹ️</div>'+
+        '<div class="inhalt"><p class="detail" style="color:var(--tinte);font-size:15px">'+esc(e.info||'')+'</p></div>';
+      return karte;
     }
 
-    var stdBlock = stunde
-      ? '<div class="std"><b>'+esc(stunde)+'</b><span>STD</span></div>'
+    // 3) Vertretung – aus den sauberen Feldern einen Satz bauen
+    karte.className='karte';
+    var badge='', kopf='';
+    if(/entf/i.test(e.info)){
+      badge='<span class="badge b-entfall">fällt aus</span>';
+      kopf='entfällt'+(e.lkr?' (bei '+esc(e.lkr)+')':'');
+    } else if(/raum/i.test(e.info)){
+      badge='<span class="badge b-raum">Raumänderung</span>';
+      kopf=(e.durch?'bei '+esc(e.durch)+' ':'')+(e.raum?'→ Raum '+esc(e.raum):'');
+    } else {
+      var bits=[];
+      if(e.durch) bits.push('bei '+esc(e.durch));
+      if(e.raum)  bits.push('Raum '+esc(e.raum));
+      kopf=bits.join(', ')||'Vertretung';
+    }
+
+    // Zusatzinfo (z.B. "statt Mi 6.St.", "zusammen mit 7bc") als Detailzeile
+    var detail='';
+    if(e.info && !/^(entf\S*llt)$/i.test(e.info) && !/^raum\S*nderung$/i.test(e.info)){
+      detail=e.info;
+    }
+    // Fach-Lehrer-Kürzel (e.lkr) bei Nicht-Entfall zusätzlich zeigen
+    if(e.lkr && !/entf/i.test(e.info)){
+      detail=(detail?detail+' · ':'')+'urspr. '+e.lkr;
+    }
+
+    var stdBlock = e.std
+      ? '<div class="std"><b>'+esc(e.std)+'</b><span>STD</span></div>'
       : '<div class="std"><b>–</b></div>';
 
     karte.innerHTML =
@@ -298,9 +309,10 @@
       var tag=document.createElement('div'); tag.className='tag';
       tag.innerHTML='<h2>'+esc(lbl.text)+(lbl.rel?' <span class="rel">'+lbl.rel+'</span>':'')+'</h2>';
       listeEl.appendChild(tag);
-      // Frei-Einträge zuerst
+      // Reihenfolge je Tag: kein Unterricht → Vertretungen → allgemeine Infos
+      var rang={frei:0,vertretung:1,info:2};
       gruppen[key].slice().sort(function(a,b){
-        return (a.typ==='frei'?0:1)-(b.typ==='frei'?0:1);
+        return (rang[a.typ]||1)-(rang[b.typ]||1);
       }).forEach(function(e){ listeEl.appendChild(baueKarte(e)); });
     });
   }
